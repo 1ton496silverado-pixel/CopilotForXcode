@@ -342,24 +342,44 @@ extension Workspace {
         )]
     }
     
-    /// Converts UTF-16 offset to LSP Position (line, character)
+    /// Converts UTF-16 offset to LSP Position (line, character).
+    ///
+    /// LSP line numbers treat both `\n` and `\r` as line breaks, and `\r\n`
+    /// as a single newline sequence. This keeps offsets stable across files
+    /// created on different platforms.
     private func utf16OffsetToPosition(content: String, offset: Int) -> Position {
         var line = 0
         var character = 0
-        
-        let utf16View = content.utf16
+
+        let utf16View = Array(content.utf16)
         let safeOffset = min(offset, utf16View.count)
-        let endIndex = utf16View.index(utf16View.startIndex, offsetBy: safeOffset)
-        
-        for char in utf16View[..<endIndex] {
-            if char == 0x000A { // Line feed (\n)
+        var index = 0
+
+        while index < safeOffset {
+            let char = utf16View[index]
+
+            if char == 0x000D { // carriage return
+                if index + 1 < safeOffset && utf16View[index + 1] == 0x000A { // CRLF
+                    index += 2
+                } else {
+                    index += 1
+                }
                 line += 1
                 character = 0
-            } else {
-                character += 1
+                continue
             }
+
+            if char == 0x000A { // line feed
+                index += 1
+                line += 1
+                character = 0
+                continue
+            }
+
+            index += 1
+            character += 1
         }
-        
+
         return Position(line: line, character: character)
     }
     
